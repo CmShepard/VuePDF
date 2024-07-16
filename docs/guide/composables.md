@@ -1,8 +1,14 @@
+---
+outline: [2,3]
+---
+
 # Composables
 
 ## usePDF
 
 This package provides a default composable named `usePDF` that loads and prepare the PDF Document for it usage with `VuePDF` component, also let you get some basic information and properties about the document.
+
+Keep in mind that `usePDF` use the same [DocumentInitParameter](https://github.com/mozilla/pdf.js/blob/38287d943532eee939ceffbe6861163f93805ca7/src/display/api.js#L145) as `pdf.js`, so you could decide how `pdf.js` should loads your PDF and then make use of more of `pdf.js` features that are not included in `VuePDF` by default.
 
 ```vue
 <script setup>
@@ -16,11 +22,29 @@ const { pdf, pages, info } = usePDF('sample.pdf')
 </template>
 ```
 
+### Reactivity
+
+`usePDF` is also reactive if you use a `ref<src>` instead of a plain `src`, when the value of `ref` changes the returned values also will chage.
+
+```vue
+<script setup>
+import { VuePDF, usePDF } from '@tato30/vue-pdf'
+
+// Changing currentPdf value will change pdf, pages and info values
+const currentPdf = ref('sample.pdf')
+const { pdf, pages, info } = usePDF(currentPdf)
+</script>
+
+<template>
+  <VuePDF :pdf="pdf" />
+</template>
+```
+
 ### Parameters
 
 #### src
 
-Type: `string | URL | TypedArray | DocumentInitParameters` <br/>
+Type: `string | URL | TypedArray | DocumentInitParameters | ref<string> | ref<URL> | ref<TypedArray> | ref<DocumentInitParameters>` <br/>
 Required: `True`
 
 This parameter is the same `src`  of [pdf.js](https://github.com/mozilla/pdf.js/blob/38287d943532eee939ceffbe6861163f93805ca7/src/display/api.js#L145)
@@ -68,27 +92,62 @@ const { pdf, pages, info } = usePDF('sample.pdf', {
 
 Type: `PDFDocumentLoadingTask`
 
-Document loading task, see [PDFDocumentLoadingTask](https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib-PDFDocumentLoadingTask.html) for more details.
+Document's loading task, see [PDFDocumentLoadingTask](https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib-PDFDocumentLoadingTask.html) for more details.
+
+---
 
 #### pages
 
 Type: `int`
 
-Document number pages.
+Document's number pages.
+
+---
 
 #### info
 
 Type: `object`
 
-Document information object.
+Document's information object.
 
 ```json
 {
   "metadata": {...}, // Metadata object
   "attachments": {...}, // File attachments object
   "javascript": [...], // Array of embedded scripts
+  "outline": {...} // Outline objects
 }
 ```
+---
+
+#### getPDFDestination
+
+Type: `function`
+
+This function returns the page number referenced by `dest` object used by internal-links or outline object. Check the related example in [Table of Content](../examples/advanced/toc.md)
+
+---
+
+#### print
+
+Type: `function`
+
+Open the browser's print dialog with current PDF loaded with the following parameters:
+
+- `dpi`: Pages resolution (default: `150`).
+- `filename`: Filename of the printed file (default: `'filename'`).
+
+---
+
+#### download
+
+Type: `function`
+
+Trigger a downloading action using an `HTMLAnchorElement` with the following parameters:
+
+- `filename`: Filename of the downloaded file (default: `'filename'`)
+
+---
 
 ### Document API
 
@@ -108,9 +167,9 @@ function doSomething() {
 }
 ```
 
-## Custom
+## Make your own composable
 
-Using `usePDF` it's not required, you can use the pdf.js API in the component or build your own composable by yourself. Just need to ensure send on [`pdf`](./props.md#pdf) prop a `shallowRef | ref` [PDFDocumentLoadingTask](https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib-PDFDocumentLoadingTask.html) object.
+Using `usePDF` it's not required, you can use the `pdf.js` API in your components or build your own composable yourself. Just need to be sure to send on [`pdf`](./props.md#pdf) prop a `shallowRef | ref` [PDFDocumentLoadingTask](https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib-PDFDocumentLoadingTask.html) object.
 
 ```vue
 <script setup>

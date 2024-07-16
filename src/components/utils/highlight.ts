@@ -1,63 +1,89 @@
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 import type { TextContent } from 'pdfjs-dist/types/src/display/text_layer'
+import type { HighlightOptions, Match } from '../types'
 
-interface Match {
-  start: {
-    idx: number
-    offset: number
+function searchQuery(textContent: TextContent, query: string, options: HighlightOptions) {
+  const strs = []
+  for (const textItem of textContent.items as TextItem[]) {
+    if (textItem.hasEOL) {
+      // Remove the break line hyphen in the middle of the sentence
+      if (textItem.str.endsWith('-')) {
+        const lastHyphen = textItem.str.lastIndexOf('-')
+        strs.push(textItem.str.substring(0, lastHyphen))
+      }
+      else {
+        strs.push(textItem.str, '\n')
+      }
+    }
+    else {
+      strs.push(textItem.str)
+    }
   }
-  end: {
-    idx: number
-    offset: number
-  }
-}
 
-function searchQuery(textItems: string[], query: string, ignoreCase = false) {
-  const textJoined = textItems.join(' ')
+  // Join the text as is presented in textlayer and then replace newlines (/n) with whitespaces
+  const textJoined = strs.join('').replace(/\n/g, ' ')
+
   const regexFlags = ['g']
-  if (ignoreCase)
+  if (options.ignoreCase)
     regexFlags.push('i')
 
-  const regex = new RegExp(query, regexFlags.join(''))
+  let fquery = query.trim()
+  if (options.completeWords)
+    fquery = `\\b${fquery}\\b`
+
+  const regex = new RegExp(fquery, regexFlags.join(''))
 
   const matches = []
   let match
 
   // eslint-disable-next-line no-cond-assign
   while ((match = regex.exec(textJoined)) !== null)
-    matches.push([match.index, match[0].length])
+    matches.push([match.index, match[0].length, match[0]])
 
   return matches
 }
 
-function convertMatches(matches: number[][], textItems: string[]): Match[] {
+function convertMatches(matches: (number | string)[][], textContent: TextContent): Match[] {
+  function endOfLineOffset(item: TextItem) {
+    // When textitem has a EOL flag and the string has a hyphen at the end
+    // the hyphen should be removed (-1 len) so the sentence could be searched as a joined one.
+    // In other cases the EOL flag introduce a whitespace (+1 len) between two different sentences
+    if (item.hasEOL) {
+      if (item.str.endsWith('-'))
+        return -1
+      else
+        return 1
+    }
+    return 0
+  }
+
   let index = 0
   let tindex = 0
+  const textItems = textContent.items as TextItem[]
   const end = textItems.length - 1
 
   const convertedMatches = []
 
   // iterate over all matches
   for (let m = 0; m < matches.length; m++) {
-    let mindex = matches[m][0]
+    let mindex = matches[m][0] as number
 
-    while (index !== end && mindex >= tindex + textItems[index].length) {
-      tindex += textItems[index].length + 1
+    while (index !== end && mindex >= tindex + textItems[index].str.length) {
+      const item = textItems[index]
+      tindex += item.str.length + endOfLineOffset(item)
       index++
     }
-
-    if (index === end)
-      console.warn('Matches could not be found in textItemss')
 
     const divStart = {
       idx: index,
       offset: mindex - tindex,
     }
 
-    mindex += matches[m][1]
+    mindex += matches[m][1] as number
 
-    while (index !== end && mindex > tindex + textItems[index].length) {
-      tindex += textItems[index].length + 1
+    while (index !== end && mindex > tindex + textItems[index].str.length) {
+      const item = textItems[index]
+      tindex += item.str.length + endOfLineOffset(item)
       index++
     }
 
@@ -68,9 +94,10 @@ function convertMatches(matches: number[][], textItems: string[]): Match[] {
     convertedMatches.push({
       start: divStart,
       end: divEnd,
+      str: matches[m][2] as string,
+      oindex: matches[m][0] as number,
     })
   }
-
   return convertedMatches
 }
 
@@ -84,6 +111,9 @@ function highlightMatches(matches: Match[], textContent: TextContent, textDivs: 
     let nextContent = ''
 
     let div = textDivs[idx]
+
+    if (!div)
+      return // don't process if div is undefinied
 
     if (div.nodeType === Node.TEXT_NODE) {
       const span = document.createElement('span')
@@ -110,9 +140,27 @@ function highlightMatches(matches: Match[], textContent: TextContent, textDivs: 
     nodes.push(span)
 
     if (startOffset > 0) {
-      prevContent = textItem.str.substring(0, startOffset)
-      const node = document.createTextNode(prevContent)
-      nodes.unshift(node)
+      if (div.childNodes.length === 1 && div.childNodes[0].nodeType === Node.TEXT_NODE) {
+        prevContent = textItem.str.substring(0, startOffset)
+        const node = document.createTextNode(prevContent)
+        nodes.unshift(node)
+      }
+      else {
+        let alength = 0
+        const prevNodes = []
+        for (const childNode of div.childNodes) {
+          const textValue = childNode.nodeType === Node.TEXT_NODE
+            ? childNode.nodeValue!
+            : childNode.firstChild!.nodeValue!
+          alength += textValue.length
+
+          if (alength <= startOffset)
+            prevNodes.push(childNode)
+          else if (startOffset >= alength - textValue.length && endOffset <= alength)
+            prevNodes.push(document.createTextNode(textValue.substring(0, startOffset - (alength - textValue.length))))
+        }
+        nodes.unshift(...prevNodes)
+      }
     }
     if (endOffset > 0) {
       nextContent = textItem.str.substring(endOffset)
@@ -140,11 +188,25 @@ function highlightMatches(matches: Match[], textContent: TextContent, textDivs: 
   }
 }
 
-function findMatches(query: string, textContent: TextContent, ignoreCase = true) {
+function resetDivs(textContent: TextContent, textDivs: HTMLElement[]) {
   const textItems = textContent.items.map(val => (val as TextItem).str)
-  const matches = searchQuery(textItems, query, ignoreCase)
-  return convertMatches(matches, textItems)
+  for (let idx = 0; idx < textDivs.length; idx++) {
+    const div = textDivs[idx]
+
+    if (div && div.nodeType !== Node.TEXT_NODE) {
+      const textNode = document.createTextNode(textItems[idx])
+      div.replaceChildren(textNode)
+    }
+  }
 }
 
-export { findMatches, highlightMatches }
+function findMatches(queries: string[], textContent: TextContent, options: HighlightOptions) {
+  const convertedMatches = []
+  for (const query of queries) {
+    const matches = searchQuery(textContent, query, options)
+    convertedMatches.push(...convertMatches(matches, textContent))
+  }
+  return convertedMatches
+}
 
+export { findMatches, highlightMatches, resetDivs }

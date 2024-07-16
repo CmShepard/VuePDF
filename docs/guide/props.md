@@ -5,7 +5,7 @@
 Type: `PDFDocumentLoadingTask` <br/>
 Required: `true`
 
-The PDFDocumentLoadingTask obtained from usePDF
+The `PDFDocumentLoadingTask` obtained from usePDF.
 
 ```vue
 <VuePDF :pdf="pdf" />
@@ -17,10 +17,22 @@ Type: `int` <br/>
 Required: `false` <br />
 Default: `1`
 
-Page to render, this prop must be a page number starting at 1
+Page to render, this prop must be a page number starting at 1.
 
 ```vue
 <VuePDF :pdf="pdf" :page="1" />
+```
+
+## intent
+
+Type: `string` <br />
+Required: `false` <br />
+Default: `display`
+
+Rendering intent, can be `display`, `print`, or `any`.
+
+```vue
+<VuePDF :pdf="pdf" intent="print" />
 ```
 
 ## scale
@@ -29,7 +41,7 @@ Type: `int` <br />
 Required: `false` <br />
 Default: `1`
 
-Page scale
+Page's scale.
 
 ```vue
 <VuePDF :pdf="pdf" :scale="0.5" />
@@ -41,17 +53,41 @@ Type: `boolean` <br />
 Required: `false` <br />
 Default: `false`
 
-Fit page with parent width, this prop replace `scale` in width calculation
+Fit the page's width with the parent width. This prop replace [scale](#scale) in size calculation and has more precedence than [width](#width).
 
 ```vue
 <VuePDF :pdf="pdf" fit-parent />
+```
+
+## width
+
+Type: `number` <br /> 
+Required: `false` <br />
+Default: `null`
+
+Scale the page using a `width` in px. This prop replace [scale](#scale) in size calculation and has more precedence than [height](#height).
+
+```vue
+<VuePDF :pdf="pdf" :width="500" />
+```
+
+## height
+
+Type: `number` <br /> 
+Required: `false` <br />
+Default: `null`
+
+Scale the page using a `height` in px. This prop replace [scale](#scale) in size calculation.
+
+```vue
+<VuePDF :pdf="pdf" :height="500" />
 ```
 
 ## rotation
 
 Type: `int` <br />
 Required: `false` <br />
-Default: `Document Default`
+Default: `Document's Default`
 
 Rotate the page in 90° multiples eg. (`90`, `180`, `270`)
 
@@ -65,10 +101,46 @@ Type: `boolean` <br />
 Required: `false` <br />
 Default: `false`
 
-Enable text selection in page
+Enables text selection.
 
 ```vue
 <VuePDF :pdf="pdf" text-layer />
+```
+
+## highlight-text  <badge type="tip" text="v1.9" vertical="middle" />
+
+Type: `string | string[]` <br />
+Required: `false` <br />
+Default: `null`
+
+Highlight on the page the searched text or the searched array of text.
+
+```vue
+<VuePDF :pdf="pdf" text-layer hightlight-text="javascript" />
+
+<VuePDF :pdf="pdf" text-layer :hightlight-text="['javascript', 'trace-based']" />
+```
+
+## highlight-options  <badge type="tip" text="v1.9" vertical="middle" />
+
+Type: `object` <br />
+Required: `false` <br />
+Default: 
+```
+{
+  completeWords: false,
+  ignoreCase: true
+}
+```
+
+Settings for how to find the [highlight-text](#highlight-text) on page's text.
+
+```vue
+<VuePDF :pdf="pdf" text-layer hightlight-text="javascript" :highlight-options="{
+    completeWords: true,
+    ignoreCase: false
+  }"
+/>
 ```
 
 ## annotation-layer
@@ -77,7 +149,7 @@ Type: `boolean` <br />
 Required: `false` <br />
 Default: `false`
 
-Enable document annotations like links, popups, widgets, etc.
+Enables document annotations like links, popups, widgets, etc.
 
 ```vue
 <VuePDF :pdf="pdf" annotation-layer />
@@ -89,13 +161,13 @@ Type: `string` <br />
 Required: `false` <br />
 Default: `null`
 
-Prints a watermark pattern over canvas.
+Prints a watermark pattern over the canvas.
 
 ```vue
 <VuePDF :pdf="pdf" watermark-text="Sample" />
 ```
 
-## watermark-options <badge type="tip" text="v1.8" vertical="middle" />
+## watermark-options
 
 Type: `object` <br />
 Required: `false` <br />
@@ -110,7 +182,7 @@ Default:
 }
 ```
 
-Customize how watermark is printed over canvas.
+Customize how watermark is printed over the canvas.
 
 ```vue
 <script setup>
@@ -207,5 +279,3 @@ const annotationMap = ref({ '7R': { value: 'Modified value' } })
 
 <VuePDF :pdf="pdf" annotation-layer :annotations-map="annotationMap" />
 ```
-
-<!-- > NOTE: `annotations-filter` has more precedence than `annotations-map`, so if both used, annotations will be first filter and then mapped. -->

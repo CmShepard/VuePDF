@@ -4,6 +4,7 @@ import { onMounted, ref, toRaw, watch } from 'vue'
 
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from 'pdfjs-dist'
 import type { AnnotationLayerParameters } from 'pdfjs-dist/types/src/display/annotation_layer'
+import type { IDownloadManager } from 'pdfjs-dist/types/web/interfaces'
 
 import { EVENTS_TO_HANDLER, annotationEventsHandler } from '../utils/annotations'
 import { SimpleLinkService } from '../utils/link_service'
@@ -19,10 +20,12 @@ const props = defineProps<{
   imageResourcesPath?: string
   hideForms?: boolean
   enableScripting?: boolean
+  intent: string
 }>()
 
 const emit = defineEmits<{
   (event: 'annotation', payload: AnnotationEventPayload): void
+  (event: 'annotationLoaded', payload: any[]): void
 }>()
 
 const layer = ref<HTMLDivElement>()
@@ -49,7 +52,7 @@ async function getHasJSActions() {
 async function getAnnotations() {
   const page = props.page
 
-  let annotations = await page?.getAnnotations()
+  let annotations = await page?.getAnnotations({ intent: props.intent })
   if (props.annotationsFilter) {
     const filters = props.annotationsFilter
     annotations = annotations!.filter((value) => {
@@ -90,7 +93,17 @@ async function render() {
     for (const [key, value] of Object.entries(props.annotationsMap))
       annotationStorage.setValue(key, value)
   }
-  const parameters: AnnotationLayerParameters = {
+
+  const layerParameters = {
+    accessibilityManager: undefined,
+    annotationCanvasMap: canvasMap,
+    div: layer.value!,
+    page: page!,
+    viewport: viewport!.clone({ dontFlip: true }),
+    annotationEditorUIManager: null,
+  }
+
+  const renderParameters: AnnotationLayerParameters = {
     annotations: annotations.value!,
     viewport: viewport!.clone({ dontFlip: true }),
     linkService: new SimpleLinkService(),
@@ -102,10 +115,13 @@ async function render() {
     enableScripting: false,
     hasJSActions: await getHasJSActions(),
     fieldObjects: await getFieldObjects(),
-    downloadManager: null,
+    downloadManager: null as unknown as IDownloadManager,
     imageResourcesPath: props.imageResourcesPath,
   }
-  PDFJS.AnnotationLayer.render(parameters)
+  const task = new PDFJS.AnnotationLayer(layerParameters).render(renderParameters)
+  task.then(async () => {
+    emit('annotationLoaded', (await getAnnotations())!)
+  })
 
   for (const evtHandler of EVENTS_TO_HANDLER)
     layer.value!.addEventListener(evtHandler, annotationsEvents)

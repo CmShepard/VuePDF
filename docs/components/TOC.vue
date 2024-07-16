@@ -1,10 +1,10 @@
 <script setup>
 import { ref, triggerRef, watchEffect } from 'vue';
-import { VuePDF, getPDFDestination, usePDF } from '@tato30/vue-pdf';
-import { withBase } from '@vuepress/client';
+import { VuePDF, usePDF } from '@tato30/vue-pdf';
+import { withBase } from 'vitepress/client';
 import ChaptersList from './ChaptersList.vue';
 
-const { pdf, info } = usePDF(withBase('/example_045.pdf'))
+const { pdf, info, getPDFDestination } = usePDF(withBase('/example_045.pdf'))
 const eventValue = ref({})
 const outlineTree = ref([])
 
@@ -13,7 +13,7 @@ watchEffect(() => {
     outlineTree.value = info.value.outline.map(function convert(node) {
       return {
         title: node.title,
-        destination: getPDFDestination(info.value.document, node.dest),
+        destination: getPDFDestination(node.dest),
         items: node.items.map((item) => {
           return convert(item)
         }),
@@ -45,7 +45,7 @@ function onChapterClick(value) {
         <pre class="language-json"><code>{{ eventValue }}</code></pre>
       </div>
 
-      <div class="container">
+      <div class="vue-pdf-container">
         <VuePDF :pdf="pdf" :scale="0.75" />
       </div>
     </div>

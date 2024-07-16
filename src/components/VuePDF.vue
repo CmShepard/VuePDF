@@ -7,7 +7,7 @@ import 'pdfjs-dist/web/pdf_viewer.css'
 
 import type { PDFDocumentLoadingTask, PDFPageProxy, PageViewport, RenderTask } from 'pdfjs-dist'
 import type { GetViewportParameters, PDFDocumentProxy, RenderParameters } from 'pdfjs-dist/types/src/display/api'
-import type { AnnotationEventPayload, LoadedEventPayload, WatermarkOptions } from './types'
+import type { AnnotationEventPayload, HighlightEventPayload, HighlightOptions, LoadedEventPayload, TextLayerLoadedEventPayload, WatermarkOptions } from './types'
 
 import AnnotationLayer from './layers/AnnotationLayer.vue'
 import TextLayer from './layers/TextLayer.vue'
@@ -25,23 +25,32 @@ const props = withDefaults(defineProps<{
   scale?: number
   rotation?: number
   fitParent?: boolean
+  width?: number
+  height?: number
   textLayer?: boolean
   imageResourcesPath?: string
   hideForms?: boolean
+  intent?: string
   annotationLayer?: boolean
   annotationsFilter?: string[]
   annotationsMap?: object
   watermarkText?: string
   watermarkOptions?: WatermarkOptions
-  highlightText?: string
+  highlightText?: string | string[]
+  highlightOptions?: HighlightOptions
 }>(), {
   page: 1,
   scale: 1,
+  intent: 'display',
 })
 
 const emit = defineEmits<{
   (event: 'annotation', payload: AnnotationEventPayload): void
+  (event: 'highlight', payload: HighlightEventPayload): void
   (event: 'loaded', payload: LoadedEventPayload): void
+  (event: 'textLoaded', payload: TextLayerLoadedEventPayload): void
+  (event: 'annotationLoaded', payload: any[]): void
+  (event: 'xfaLoaded'): void
 }>()
 
 // Template Refs
@@ -59,15 +68,17 @@ const internalProps = computed(() => {
 })
 const alayerProps = computed(() => {
   return {
-    annotationLayer: props.annotationsFilter,
     annotationsMap: props.annotationsMap,
-    imageResourcePath: props.imageResourcesPath,
+    annotationsFilter: props.annotationsFilter,
+    imageResourcesPath: props.imageResourcesPath,
     hideForms: props.hideForms,
+    intent: props.intent,
   }
 })
 const tlayerProps = computed(() => {
   return {
     highlightText: props.highlightText,
+    highlightOptions: props.highlightOptions,
   }
 })
 
@@ -98,6 +109,14 @@ function getScale(page: PDFPageProxy): number {
     const parentWidth: number = (container.value!.parentNode! as HTMLElement).clientWidth
     const scale1Width = page.getViewport({ scale: 1 }).width
     fscale = parentWidth / scale1Width
+  }
+  else if (props.width) {
+    const scale1Width = page.getViewport({ scale: 1 }).width
+    fscale = props.width / scale1Width
+  }
+  else if (props.height) {
+    const scale1Height = page.getViewport({ scale: 1 }).height
+    fscale = props.height / scale1Height
   }
   return fscale
 }
@@ -205,6 +224,7 @@ function renderPage(pageNum: number) {
       viewport,
       annotationMode: props.hideForms ? PDFJS.AnnotationMode.ENABLE : PDFJS.AnnotationMode.ENABLE_FORMS,
       transform,
+      intent: props.intent,
     }
 
     if (canvas?.getAttribute('role') !== 'main') {
@@ -241,7 +261,15 @@ watch(() => props.pdf, (pdf) => {
     initDoc(pdf)
 })
 
-watch(() => [props.scale, props.rotation, props.page, props.hideForms], () => {
+watch(() => [
+  props.scale,
+  props.width,
+  props.height,
+  props.rotation,
+  props.page,
+  props.hideForms,
+  props.intent,
+], () => {
   // Props that should dispatch an render task
   renderPage(props.page)
 })
@@ -267,15 +295,24 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="container" style="position: relative; display: block; overflow: hidden;">
+  <div ref="container" style="position: relative; display: block;">
     <canvas dir="ltr" style="display: block" role="main" />
     <AnnotationLayer
-      v-show="annotationLayer"
+      v-if="annotationLayer"
       v-bind="{ ...internalProps, ...alayerProps }"
       @annotation="emit('annotation', $event)"
+      @annotation-loaded="emit('annotationLoaded', $event)"
     />
-    <TextLayer v-show="textLayer" v-bind="{ ...internalProps, ...tlayerProps }" />
-    <XFALayer v-bind="internalProps" />
+    <TextLayer
+      v-if="textLayer"
+      v-bind="{ ...internalProps, ...tlayerProps }"
+      @highlight="emit('highlight', $event)"
+      @text-loaded="emit('textLoaded', $event)"
+    />
+    <XFALayer
+      v-bind="{ ...internalProps }"
+      @xfa-loaded="emit('xfaLoaded')"
+    />
     <div v-show="loading" ref="loadingLayer" style="position: absolute;">
       <slot />
     </div>
